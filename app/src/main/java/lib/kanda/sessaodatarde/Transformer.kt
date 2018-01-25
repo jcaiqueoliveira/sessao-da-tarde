@@ -18,19 +18,15 @@ class Transformer1(val retries: Retry = 4) : ObservableTransformer<Any, Any> {
     override fun apply(upstream: Observable<Any>): ObservableSource<Any> {
         return upstream.retryWhen { errors ->
             errors.scan(0, { errorCount, err ->
-                if (errorCount > retries)
+                if (errorCount > retries || err != PoolingException.Pooling) {
                     throw err
-                Log.e("Contador", errorCount.toString())
-                errorCount + 1
+                }
+                (errorCount + 1)
             }).flatMap { retryCount ->
-                val mathPow = //Math.pow(4.toDouble(), retryCount.toDouble())
-                        4
-                Observable.timer(4, TimeUnit.SECONDS)
-                        .map { it ->
-                            Log.e("Timer", mathPow.toString())
-                            it
-                        }
+//                val mathPow = Math.pow(4.toDouble(), retryCount.toDouble())
+                Observable.interval(1, TimeUnit.SECONDS)
             }
         }
     }
 }
+
