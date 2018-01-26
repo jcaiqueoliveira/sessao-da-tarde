@@ -3,12 +3,9 @@ package lib.kanda.sessaodatarde
 import io.reactivex.Observable
 import io.reactivex.ObservableSource
 import io.reactivex.ObservableTransformer
-import io.reactivex.Scheduler
-import io.reactivex.schedulers.Schedulers
+import io.reactivex.functions.BiFunction
 import java.util.concurrent.TimeUnit
 
-
-typealias Retry = Int
 
 /**
  * Created by jcosilva on 1/24/2018.
@@ -17,45 +14,45 @@ typealias Retry = Int
  * Foi criado uma exception para representar um estado de Polling, dado que um pooling acorreu é feito um numero N de retentativas,
  * as retentativas continuam mesmo que ocorra uma exception diferente de Polling
  **/
-class Transformer1(val maxRetry: Retry = 4, val scheduler: Scheduler = Schedulers.trampoline()) : ObservableTransformer<Any, Any> {
+
+class Transformer1(val judge: Judge) : ObservableTransformer<Any, Any> {
+    private val DEFAULT_VALUE = 0
+    private val FIRST = 1L
+
     override fun apply(upstream: Observable<Any>): ObservableSource<Any> {
         return upstream.retryWhen { errors ->
             errors
-                    .scan(-1, { errorCount, err ->
-                        checkIfProcedStreamOrRetry(errorCount, err)
+                    .scan(DEFAULT_VALUE, { errorCount, err ->
+                        return@scan when (judge.checkIfRetryIsNeeded(errorCount, err)) {
+                            RETRY_STATUS.NEED_RETRY -> (errorCount + 1)
+                            RETRY_STATUS.DONT_NEED_RETRY -> throw err
+                        }
                     })
-                    .filter { it >= 0 }
-                    .flatMap { retryCount ->
-                        applyDelayTime(retryCount)
+                    .filter { it > 0 } //remover para uma função filtro
+                    .switchMap { retryCount ->
+                        Observable
+                                .interval(judge.timeToRetry(retryCount), TimeUnit.MILLISECONDS)
+                                .take(FIRST)
                     }
         }
     }
-
-    fun checkIfProcedStreamOrRetry(errorCount: Int, error: Throwable): Int {
-        val hasAnErrorInPollingProcess = errorCount > 0 && error != PollingException.Polling
-        return when {
-            hasAnErrorInPollingProcess -> errorCount + 1
-            errorCount > maxRetry || error != PollingException.Polling -> throw error
-            else -> errorCount + 1
-        }
-    }
-
-    fun applyDelayTime(retry: Retry): Observable<Long> {
-        //                val mathPow = Math.pow(4.toDouble(), retryCount.toDouble())
-        return Observable.interval(1, TimeUnit.SECONDS, scheduler).take(1)
-    }
 }
 
-///**
-// * Transformer fornecido no exemplo da documentação do retry when
-// * */
-//class Transformer2 : ObservableTransformer<Any, Any> {
-//    override fun apply(upstream: Observable<Any>): ObservableSource<Any> {
-//        return upstream.retryWhen { attempts ->
-//            attempts.zipWith(Observable.range(1, 3), BiFunction<Throwable, Int, Int> { _, i: Int -> i }).flatMap({ i: Int ->
-//                println("delay retry by $i second(s)")
-//                Observable.timer(i.toLong(), TimeUnit.SECONDS)
-//            })
-//        }
-//    }
-//}
+
+class Transformer2(val judge: Judge) : ObservableTransformer<Any, Any> {
+    private val INITIAL_VALUE = 0
+    override fun apply(upstream: Observable<Any>): ObservableSource<Any> {
+        return upstream.retryWhen { attempts ->
+            attempts.zipWith(Observable.range(INITIAL_VALUE, Int.MAX_VALUE),
+                    BiFunction<Throwable, Int, Int> { err, count ->
+                        return@BiFunction when (judge.checkIfRetryIsNeeded(count, err)) {
+                            RETRY_STATUS.NEED_RETRY -> (count + 1)
+                            RETRY_STATUS.DONT_NEED_RETRY -> throw err
+                        }
+                    }
+            ).flatMap({ count ->
+                Observable.timer(judge.timeToRetry(count), TimeUnit.SECONDS)
+            })
+        }
+    }
+}
