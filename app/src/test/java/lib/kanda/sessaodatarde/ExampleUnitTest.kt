@@ -3,7 +3,6 @@ package lib.kanda.sessaodatarde
 import io.reactivex.Observable
 import io.reactivex.observers.TestObserver
 import io.reactivex.schedulers.TestScheduler
-import io.reactivex.subjects.PublishSubject
 import io.reactivex.subscribers.TestSubscriber
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -57,45 +56,6 @@ class ExampleUnitTest {
         testObserver.assertError(t)
 
     }
-
-//    @Test
-//    fun `must do Four Retries`() {
-//        val ps = PublishSubject.create<Any>()
-//
-//        testObserver
-//        Observable.error<Any>(PollingException.Polling)
-//                .compose(Transformer1(3))
-//                .subscribeOn(testScheduler)
-//                .subscribe(testObserver)
-//
-//        testScheduler.advanceTimeTo(4, TimeUnit.SECONDS)
-//        testObserver.assertError(PollingException.Polling)
-//    }
-//
-//
-//    @Test
-//    fun testSample() {
-//        val scheduler = TestScheduler()
-//        val ps = PublishSubject.create<Any>()
-//
-//        val ts = ps.compose(Transformer1(scheduler = scheduler)).test()
-//
-//        ts.assertEmpty()
-//
-//        ts.onError(PollingException.Polling)
-//
-//        scheduler.advanceTimeBy(999, TimeUnit.MILLISECONDS)
-//        ts.assertNotComplete()
-//        ts.assertEmpty()
-//
-//        scheduler.advanceTimeBy(3, TimeUnit.SECONDS)
-//        ts.assertNotComplete()
-//
-//        scheduler.advanceTimeTo(4, TimeUnit.SECONDS)
-//        ts.assertError(PollingException.Polling)
-//        ts.assertTerminated()
-//    }
 }
-
 
 
