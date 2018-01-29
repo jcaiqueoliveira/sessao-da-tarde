@@ -11,19 +11,15 @@ enum class RETRY_STATUS {
 
 typealias Retry = Int
 
-abstract class Judge(var maxRetries: Retry = 0) {
+abstract class Judge(
+        val maxRetries: Retry = 1,
+        val listErrorToRetry: MutableList<Throwable>,
+        val listStopPooling: MutableList<Throwable>) {
 
-    private val listErrorToRetry: ArrayList<Throwable> = arrayListOf(PollingException.Polling)
-
-    private val listStopPooling: ArrayList<Throwable> = arrayListOf(PollingException.Polling)
 
     abstract fun timeToRetry(retryCount: Retry): Long
 
     abstract fun checkIfRetryIsNeeded(retryCount: Retry, err: Throwable): RETRY_STATUS
-
-    fun <T : Throwable> addErrorToRetry(listError: List<T>) = listErrorToRetry.addAll(listError)
-
-    fun <T : Throwable> addErrorToIgnore(listError: List<T>) = listStopPooling.addAll(listError)
 
     fun isAnErrorToIgnore(err: Throwable): Boolean {
         return listStopPooling.contains(err)
@@ -39,7 +35,10 @@ abstract class Judge(var maxRetries: Retry = 0) {
 
 }
 
-class Referee : Judge(4) {
+class Referee(
+        retries: Retry = 1,
+        listIgnore: MutableList<Throwable>,
+        listRetry: MutableList<Throwable>) : Judge(retries, listRetry, listIgnore) {
 
     override fun timeToRetry(retryCount: Retry): Long {
         return 1000 * retryCount.toLong()
