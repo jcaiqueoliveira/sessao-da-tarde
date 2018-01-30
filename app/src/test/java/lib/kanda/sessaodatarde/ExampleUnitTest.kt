@@ -7,6 +7,7 @@ import io.reactivex.observers.TestObserver
 import io.reactivex.schedulers.TestScheduler
 import io.reactivex.subscribers.TestSubscriber
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.TimeUnit
@@ -22,7 +23,7 @@ class ExampleUnitTest {
     lateinit var testScheduler: TestScheduler
     lateinit var testSubscribe: TestSubscriber<Any>
 
-    private val judge = Referee()
+    private val judge = Referee(4)
 
     @Before
     fun setUp() {
@@ -72,58 +73,133 @@ class ExampleUnitTest {
     @Test
     fun `should not retry when server down at first API call`() {
         // No pooling logic when 5xy at first call
-        assertFalse(judge.isAnErrorToRetry(0, InternalServerError()))
+        assertFalse(judge.isRetryNeeded(0, ServerException.InternalServerError))
     }
 
     @Test
     fun `should not retry when client error at first API call`() {
-        assertFalse(judge.isAnErrorToRetry(0, NotFoundException()))
+        assertFalse(judge.isRetryNeeded(0, ServerException.InternalServerError))
 
         // No pooling logic when 4xy at first call
     }
 
     @Test
     fun `should retry and succeed when server replies success at some attempt`() {
-        val events = listOf({ PollingException.Polling }, { "Hello" })
-        val transformer = Transformer1(judge)
+        // val events = listOf({ PollingException.Polling }, { "Hello" })
+        val transformer = Transformer1(judge, testScheduler)
         var firstEmited = false
-        Observable
+        val testSubscriber = Observable
                 .fromCallable {
-
                     return@fromCallable if (!firstEmited) {
-                        events.first()
+                        firstEmited = true
+                        throw PollingException.Polling
                     } else {
-                        events.last()
+                        " "
                     }
                 }
-                .map {
-                    firstEmited = true
-                    it
-                }
                 .compose(transformer)
-                .observeOn(testScheduler)
-                .subscribe(testObserver)
+                .test()
 
+        testScheduler.advanceTimeBy(900, TimeUnit.MILLISECONDS)
+        testSubscriber.assertNotComplete()
 
-        testObserver.awaitTerminalEvent(2000, TimeUnit.MILLISECONDS)
-        testObserver.assertComplete()
-        testObserver.assertNoErrors()
-
+        testScheduler.advanceTimeBy(3000, TimeUnit.MILLISECONDS)
+        testSubscriber
+                .assertComplete()
+                .assertNoErrors()
     }
 
     @Test
     fun `should retry and fails when running out all attempts`() {
+        val t = PollingException.Polling
+        val judge = mock<Judge>()
+        Observable
+                .error<Throwable>(t)
+                .compose(Transformer1(judge))
+                .subscribe(testObserver)
 
+        testObserver.onError(t)
     }
 
     @Test
     fun `when retrying, networking failures dont modify pooling state`() {
-        // !! checar isso aqui
+        val judge = Referee(2)
+        val transformer = Transformer1(judge, testScheduler)
+        var countRetries = 1
+        val testSubscriber = Observable
+                .fromCallable {
+                    return@fromCallable when (countRetries) {
+                        1 -> {
+                            countRetries++
+                            throw PollingException.Polling
+                        }
+                        2 -> {
+                            countRetries++
+                            throw NetworkException.ConnectionSpike
+                        }
+                        else -> {
+                            countRetries++
+                            throw PollingException.Polling
+                        }
+                    }
+                }
+                .compose(transformer)
+                .test()
+
+        testScheduler.advanceTimeBy(900, TimeUnit.MILLISECONDS)
+        testSubscriber.assertNotComplete()
+
+        testScheduler.advanceTimeBy(1000, TimeUnit.MILLISECONDS)
+        testSubscriber.assertNotComplete()
+
+        testScheduler.advanceTimeBy(2000, TimeUnit.MILLISECONDS)
+        testSubscriber
+                .assertError(PollingException.Polling)
+                .assertTerminated()
+
+        assertTrue(judge.isRetryNeeded(0, PollingException.Polling))
+        assertTrue(judge.isRetryNeeded(1, NetworkException.ConnectionSpike))
+
     }
 
     @Test
     fun `when retrying, REST failures overrides pooling and are forwarded`() {
-        // se der erro de rest sair do pooling
+        val judge = Referee(2)
+        val transformer = Transformer1(judge, testScheduler)
+        var countRetries = 1
+        val testSubscriber = Observable
+                .fromCallable {
+                    return@fromCallable when (countRetries) {
+                        1 -> {
+                            countRetries++
+                            throw PollingException.Polling
+                        }
+                        2 -> {
+                            countRetries++
+                            throw ApiException.NotFoundException
+                        }
+                        else -> {
+                            countRetries++
+                            throw PollingException.Polling
+                        }
+                    }
+                }
+                .compose(transformer)
+                .test()
+
+        testScheduler.advanceTimeBy(900, TimeUnit.MILLISECONDS)
+        testSubscriber.assertNotComplete()
+
+        testScheduler.advanceTimeBy(1000, TimeUnit.MILLISECONDS)
+        testSubscriber.assertNotComplete()
+
+        testScheduler.advanceTimeBy(2000, TimeUnit.MILLISECONDS)
+        testSubscriber
+                .assertError(ApiException.NotFoundException)
+                .assertTerminated()
+
+        assertTrue(judge.isRetryNeeded(0, PollingException.Polling))
+        assertFalse(judge.isRetryNeeded(1, ApiException.NotFoundException))
     }
 
 }
