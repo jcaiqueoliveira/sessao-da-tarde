@@ -3,7 +3,9 @@ package lib.kanda.sessaodatarde
 import io.reactivex.Observable
 import io.reactivex.ObservableSource
 import io.reactivex.ObservableTransformer
+import io.reactivex.Scheduler
 import io.reactivex.functions.BiFunction
+import io.reactivex.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
 
 
@@ -15,7 +17,7 @@ import java.util.concurrent.TimeUnit
  * as retentativas continuam mesmo que ocorra uma exception diferente de Polling
  **/
 
-class Transformer1(val judge: Judge) : ObservableTransformer<Any, Any> {
+class Transformer1(val judge: Judge, val scheduler: Scheduler = Schedulers.computation()) : ObservableTransformer<Any, Any> {
     private val DEFAULT_VALUE = 0
     private val FIRST = 1L
 
@@ -31,7 +33,7 @@ class Transformer1(val judge: Judge) : ObservableTransformer<Any, Any> {
                     .filter { it > 0 } //remover para uma função filtro
                     .switchMap { retryCount ->
                         Observable
-                                .interval(judge.timeToRetry(retryCount), TimeUnit.MILLISECONDS)
+                                .interval(judge.timeToRetry(retryCount), TimeUnit.MILLISECONDS, scheduler)
                                 .take(FIRST)
                     }
         }
