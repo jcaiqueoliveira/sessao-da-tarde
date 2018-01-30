@@ -8,3 +8,9 @@ sealed class PollingException : Throwable(){
     object Polling : PollingException()
 
 }
+
+sealed class ServerException : Throwable()
+class InternalServerError : ServerException()
+
+sealed class ApiException : Throwable()
+class NotFoundException : ApiException()
