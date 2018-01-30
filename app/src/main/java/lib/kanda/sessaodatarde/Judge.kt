@@ -36,6 +36,7 @@ abstract class Judge(
             isMaxNumberOfRetries(count) -> false
             isANetworkException(err) -> true
             isAPollingException(err) -> true
+            isAApiException(err) -> false
             else -> false
         }
     }
