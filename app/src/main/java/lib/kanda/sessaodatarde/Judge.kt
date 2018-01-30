@@ -19,8 +19,25 @@ abstract class Judge(
     abstract fun checkIfRetryIsNeeded(retryCount: Retry, err: Throwable): RETRY_STATUS
 
 
-    fun isAnErrorToRetry(count: Int, err: Throwable): Boolean {
-        return err is PollingException.Polling && !isMaxNumberOfRetries(count)
+    private fun isAPollingException(err: Throwable): Boolean {
+        return err is PollingException
+    }
+
+    private fun isANetworkException(err: Throwable): Boolean {
+        return err is NetworkException
+    }
+
+    private fun isAApiException(err: Throwable): Boolean {
+        return err is ApiException
+    }
+
+    fun isRetryNeeded(count: Int, err: Throwable): Boolean {
+        return when {
+            isMaxNumberOfRetries(count) -> false
+            isANetworkException(err) -> true
+            isAPollingException(err) -> true
+            else -> false
+        }
     }
 
     fun isMaxNumberOfRetries(retryCount: Retry): Boolean {
@@ -32,11 +49,11 @@ abstract class Judge(
 class Referee(retries: Retry = 1) : Judge(retries) {
 
     override fun timeToRetry(retryCount: Retry): Long {
-        return 1000 * retryCount.toLong()
+        return 1000
     }
 
     override fun checkIfRetryIsNeeded(retryCount: Retry, err: Throwable): RETRY_STATUS {
-        return when (isAnErrorToRetry(retryCount, err)) {
+        return when (isRetryNeeded(retryCount, err)) {
             true -> NEED_RETRY
             false -> DONT_NEED_RETRY
         }
