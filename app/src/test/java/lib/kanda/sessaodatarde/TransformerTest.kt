@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  *
  * See [testing documentation](http://d.android.com/tools/testing).
  */
-class ExampleUnitTest {
+class TransformerTest {
 
     lateinit var testObserver: TestObserver<Any>
     lateinit var testScheduler: TestScheduler
