@@ -165,42 +165,66 @@ class PollerRetryTest : Spek({
         val stream = {
             eventsSource(events)
         }
+        val rootObs = Observable
+                .fromCallable {
+                    println("Emitting this!!")
+                    "Hello"
+                }
+                .logLeStream("root")
 
-        it("should resubscribe on a retry") {
+        it("should resubscribe if the retry was composed in the outer stream") {
             var rootSubscribed = 0
-            val ts = Observable
-                    .create<String> { emitter ->
-                        emitter.onNext("Hello")
-                    }
-                    .logLeStream("root")
+
+            val streamObs = stream()
+
+            val ts = rootObs
                     .doOnSubscribe { rootSubscribed++ }
-                    .flatMap { stream() }
+                    .flatMap { streamObs }
                     .compose(defaultPollerRetry(1, scheduler))
                     .test()
 
-            scheduler.advanceTimeBy(TIME_TO_WAIT * 2, TimeUnit.MILLISECONDS)
+            scheduler.advanceTimeBy(TIME_TO_WAIT, TimeUnit.MILLISECONDS)
 
+            ts.assertNoErrors()
             ts.assertComplete()
             assert.that(rootSubscribed, equalTo(2))
         }
 
+        it("should not resubscribe if the retry was composed in the inner stream") {
+            var rootSubscribed = 0
+
+            val streamObs = stream()
+                    .compose(defaultPollerRetry(1, scheduler))
+
+            val ts = rootObs
+                    .doOnSubscribe { rootSubscribed++ }
+                    .flatMap { streamObs }
+                    .test()
+
+            scheduler.advanceTimeBy(TIME_TO_WAIT, TimeUnit.MILLISECONDS)
+
+            ts.assertNoErrors()
+            ts.assertComplete()
+            assert.that(rootSubscribed, equalTo(1))
+        }
+
         it("should not resubscribe on retry if the retry is composed to a defered observable") {
             var rootSubscribed = 0
-            val ts = Observable
-                    .fromCallable { "Hello" }
+
+            val streamObs = stream()
+                    .compose(defaultPollerRetry(1, scheduler))
+
+            val ts = rootObs
                     .doOnSubscribe { rootSubscribed++ }
-                    .concatMap {
-                        Observable
-                                .defer {
-                                    eventsSource(events)
-                                            .compose(defaultPollerRetry(1, scheduler))
-                                }
+                    .flatMap {
+                        Observable.defer { streamObs }
                     }
                     .test()
 
             scheduler.advanceTimeBy(TIME_TO_WAIT, TimeUnit.MILLISECONDS)
 
             ts.assertComplete()
+            ts.assertNoErrors()
             assert.that(rootSubscribed, equalTo(1))
         }
     }
