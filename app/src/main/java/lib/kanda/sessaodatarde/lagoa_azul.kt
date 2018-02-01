@@ -6,7 +6,7 @@ import io.reactivex.Scheduler
 import io.reactivex.functions.BiFunction
 import java.util.concurrent.TimeUnit
 
-fun <T> pollerRetry(judge: Judge, timerScheduler: Scheduler) =
+fun <T> lagoaAzul(judge: Judge, timerScheduler: Scheduler) =
         ObservableTransformer<T, T> { upstream ->
             upstream.retryWhen { errorObs ->
                 data class Step(val index: Int, val throwable: Throwable, val status: RETRY_STATUS)

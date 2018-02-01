@@ -11,9 +11,10 @@ import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
 import org.junit.platform.runner.JUnitPlatform
 import org.junit.runner.RunWith
+import java.security.InvalidParameterException
 import java.util.concurrent.TimeUnit
 
-private val throwExceptionToRetry = { throw PollingException.Polling }
+private val throwExceptionToRetry: () -> Int = { throw PollingException.Polling }
 private val TIME_TO_WAIT = 1000L
 
 private fun linearJudge(retries: Int) = object : Judge(retries) {
@@ -27,13 +28,27 @@ private fun linearJudge(retries: Int) = object : Judge(retries) {
 }
 
 private fun <T> defaultPollerRetry(retries: Int = 1, scheduler: Scheduler) =
-        pollerRetry<T>(linearJudge(retries), scheduler)
+        lagoaAzul<T>(linearJudge(retries), scheduler)
 
-private fun eventsSource(events: List<() -> Int>): Observable<Int> {
+private fun eventsSource(events: String): Observable<Int> {
+    fun eventCharToEmitter(char: Char): () -> Int {
+        return when (char) {
+            'P' -> {
+                throwExceptionToRetry
+            }
+            else -> {
+                val asInt = char.toString().toIntOrNull()
+                        ?: throw InvalidParameterException("Unknown event `$char`");
+                { asInt }
+            }
+        }
+    }
+
     var mutEvents = events
     return Observable
             .fromCallable {
-                val event = mutEvents.first()
+                val eventChar = mutEvents.first()
+                val event = eventCharToEmitter(eventChar)
                 mutEvents = mutEvents.drop(1)
                 event.invoke()
             }
@@ -42,9 +57,9 @@ private fun eventsSource(events: List<() -> Int>): Observable<Int> {
 
 @RunWith(JUnitPlatform::class)
 class PollerRetryTest : Spek({
-    describe("A stream with one event composed with a `pollerRetry` transformer") {
+    describe("A stream with one event composed with `lagoaAzul` transformer") {
         val scheduler = Schedulers.trampoline()
-        val events = listOf({ 5 })
+        val events = "5"
         val stream = {
             eventsSource(events)
                     .compose(defaultPollerRetry(1, scheduler))
@@ -61,9 +76,9 @@ class PollerRetryTest : Spek({
         }
     }
 
-    describe("A stream with one error and an event composed with a `pollerRetry` transformer with 1 retry") {
+    describe("A stream with one error and an event composed with `lagoaAzul` transformer with 1 retry") {
         val scheduler = TestScheduler()
-        val events = listOf(throwExceptionToRetry, { 5 })
+        val events = "P5"
         val stream = {
             eventsSource(events)
                     .compose(defaultPollerRetry(1, scheduler))
@@ -86,9 +101,9 @@ class PollerRetryTest : Spek({
         }
     }
 
-    describe("A stream with two errors and an event composed with a `pollerRetry` transformer with 1 retry") {
+    describe("A stream with two errors and an event composed with `lagoaAzul` transformer with 1 retry") {
         val scheduler = TestScheduler()
-        val events = listOf(throwExceptionToRetry, throwExceptionToRetry, { 5 })
+        val events = "PP5"
         val stream = {
             eventsSource(events)
                     .compose(defaultPollerRetry(1, scheduler))
@@ -111,9 +126,9 @@ class PollerRetryTest : Spek({
         }
     }
 
-    describe("A stream with two errors and an event composed with a `pollerRetry` transformer with 2 retry") {
+    describe("A stream with two errors and an event composed with `lagoaAzul` transformer with 2 retry") {
         val scheduler = TestScheduler()
-        val events = listOf(throwExceptionToRetry, throwExceptionToRetry, { 5 })
+        val events = "PP5"
         val stream = {
             eventsSource(events)
                     .compose(defaultPollerRetry(2, scheduler))
@@ -146,7 +161,7 @@ class PollerRetryTest : Spek({
 
     describe("A root observable transformed into a stream with an error and an event") {
         val scheduler = TestScheduler()
-        val events = listOf(throwExceptionToRetry, { 5 })
+        val events = "P5"
         val stream = {
             eventsSource(events)
         }
@@ -163,7 +178,7 @@ class PollerRetryTest : Spek({
                     .compose(defaultPollerRetry(1, scheduler))
                     .test()
 
-            scheduler.advanceTimeBy(TIME_TO_WAIT*2, TimeUnit.MILLISECONDS)
+            scheduler.advanceTimeBy(TIME_TO_WAIT * 2, TimeUnit.MILLISECONDS)
 
             ts.assertComplete()
             assert.that(rootSubscribed, equalTo(2))
