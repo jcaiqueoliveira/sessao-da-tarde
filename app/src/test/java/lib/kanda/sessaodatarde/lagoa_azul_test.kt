@@ -228,6 +228,58 @@ class PollerRetryTest : Spek({
             assert.that(rootSubscribed, equalTo(1))
         }
     }
+
+    describe("A root observable that emits an error and transformed into an inner stream") {
+        val scheduler = TestScheduler()
+        val rootEvents = "P5"
+        val events = "5"
+        val rootStream = {
+            eventsSource(rootEvents)
+        }
+        val stream = {
+            eventsSource(events)
+        }
+
+        it("should not retry when 'lagoaAzul' is composed to the inner stream") {
+            var rootSubscribed = 0
+
+            val rootObs = rootStream()
+                    .doOnSubscribe { rootSubscribed++ }
+
+            val streamObs = rootObs
+                    .flatMap {
+                        stream()
+                                .compose(defaultPollerRetry(1, scheduler))
+                    }
+
+            val ts = streamObs.test()
+
+            scheduler.advanceTimeBy(TIME_TO_WAIT, TimeUnit.MILLISECONDS)
+
+            ts.assertNotComplete()
+            ts.assertError(PollingException::class.java)
+            assert.that(rootSubscribed, equalTo(1))
+        }
+
+        it("should retry when 'lagoaAzul' is composed to the root stream") {
+            var rootSubscribed = 0
+
+            val rootObs = rootStream()
+                    .doOnSubscribe { rootSubscribed++ }
+
+            val streamObs = rootObs
+                    .flatMap { stream() }
+                    .compose(defaultPollerRetry(1, scheduler))
+
+            val ts = streamObs.test()
+
+            scheduler.advanceTimeBy(TIME_TO_WAIT, TimeUnit.MILLISECONDS)
+
+            ts.assertComplete()
+            ts.assertNoErrors()
+            assert.that(rootSubscribed, equalTo(2))
+        }
+    }
 })
 
 private fun <T> Observable<T>.logLeStream(tag: String) =
