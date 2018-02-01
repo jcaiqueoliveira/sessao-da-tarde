@@ -4,7 +4,6 @@ import io.reactivex.Observable
 import io.reactivex.ObservableSource
 import io.reactivex.ObservableTransformer
 import io.reactivex.Scheduler
-import io.reactivex.functions.BiFunction
 import io.reactivex.schedulers.Schedulers
 import java.util.concurrent.TimeUnit
 
@@ -18,8 +17,9 @@ import java.util.concurrent.TimeUnit
  * diferente de Polling
  **/
 
-class Transformer1(val judge: Judge, val scheduler: Scheduler = Schedulers.computation()) :
-        ObservableTransformer<Any, Any> {
+class TransformerPolling(
+        val judge: Judge,
+        val scheduler: Scheduler = Schedulers.computation()) : ObservableTransformer<Any, Any> {
     private val DEFAULT_VALUE = 0
     private val FIRST = 1L
 

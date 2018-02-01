@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
  *
  * See [testing documentation](http://d.android.com/tools/testing).
  */
-class TransformerTest {
+class TransformerPollingTest {
 
     lateinit var testObserver: TestObserver<Any>
     lateinit var testScheduler: TestScheduler
@@ -33,7 +33,7 @@ class TransformerTest {
 
     @Test
     fun `should emit a string and complete without error`() {
-        val observable = Observable.just("").compose(Transformer1(judge))
+        val observable = Observable.just("").compose(TransformerPolling(judge))
         observable.subscribe(testObserver)
 
         testObserver.assertNoErrors()
@@ -47,7 +47,7 @@ class TransformerTest {
         Observable
                 .error<Any>(t)
                 .observeOn(testScheduler)
-                .compose(Transformer1(judge))
+                .compose(TransformerPolling(judge))
                 .subscribe(testObserver)
 
 
@@ -62,7 +62,7 @@ class TransformerTest {
         val judge = mock<Judge>()
         Observable
                 .just("")
-                .compose(Transformer1(judge))
+                .compose(TransformerPolling(judge))
                 .subscribe(testObserver)
 
         verifyZeroInteractions(judge)
@@ -86,7 +86,7 @@ class TransformerTest {
     @Test
     fun `should retry and succeed when server replies success at some attempt`() {
         // val events = listOf({ PollingException.Polling }, { "Hello" })
-        val transformer = Transformer1(judge, testScheduler)
+        val transformer = TransformerPolling(judge, testScheduler)
         var firstEmited = false
         val testSubscriber = Observable
                 .fromCallable {
@@ -115,7 +115,7 @@ class TransformerTest {
         val judge = mock<Judge>()
         Observable
                 .error<Throwable>(t)
-                .compose(Transformer1(judge))
+                .compose(TransformerPolling(judge))
                 .subscribe(testObserver)
 
         testObserver.onError(t)
@@ -124,7 +124,7 @@ class TransformerTest {
     @Test
     fun `when retrying, networking failures dont modify pooling state`() {
         val judge = Referee(2)
-        val transformer = Transformer1(judge, testScheduler)
+        val transformer = TransformerPolling(judge, testScheduler)
         var countRetries = 1
         val testSubscriber = Observable
                 .fromCallable {
@@ -165,7 +165,7 @@ class TransformerTest {
     @Test
     fun `when retrying, REST failures overrides pooling and are forwarded`() {
         val judge = Referee(2)
-        val transformer = Transformer1(judge, testScheduler)
+        val transformer = TransformerPolling(judge, testScheduler)
         var countRetries = 1
         val testSubscriber = Observable
                 .fromCallable {
